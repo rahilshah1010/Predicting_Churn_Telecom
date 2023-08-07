@@ -1,0 +1,153 @@
+PROC IMPORT OUT=Church_V1
+
+DATAFILE='E:\Users\nrk220000\Desktop\SAS Spring 23_NiharRK\HW5\Churn_Final_V1.csv'
+
+DBMS=csv ;
+
+RUN;
+
+ 
+
+/*Splitting the dataset into traning and testing using 70:30 split*/
+
+PROC SORT DATA = Church_V1 out = Church_V2;
+
+BY churn;
+
+RUN;
+
+ 
+
+PROC SURVEYSELECT DATA = Church_V2 OUT = Church_V3 OUTALL
+
+SAMPRATE = 0.7 SEED = 111;
+
+STRATA churn;
+
+RUN;
+
+ 
+
+PROC FREQ DATA = Church_V3;
+
+TABLES Selected*churn;
+
+RUN;
+
+ 
+
+DATA Church_training_V1 ;
+
+  SET Church_V3 ;
+
+  IF Selected = 1;
+
+RUN;
+
+ 
+
+DATA Church_test_V1 ;
+
+  SET Church_V3 ;
+
+  IF Selected = 0;
+
+RUN;
+
+ 
+
+PROC CORR DATA = Church_V3;
+
+VAR change_mou change_rev blck_dat_Mean roam_Mean drop_dat_Mean mou_opkd_Mean;
+
+RUN;
+
+ 
+
+PROC SURVEYFREQ DATA=Church_V3;
+
+TABLES churn*(csa crclscod asl_flag ethnic dualband refurb_new marital) / CHISQ;
+
+RUN;
+
+ 
+
+proc logistic data=Church_training_V1 descending;
+
+  class asl_flag dualband refurb_new marital / param=ref ;
+
+  model churn = change_mou change_rev blck_dat_Mean roam_Mean drop_dat_Mean mou_opkd_Mean asl_flag ethnic dualband refurb_new marital;
+
+run;
+
+ 
+
+proc logistic data=Church_training_V1 descending;
+
+  class asl_flag dualband refurb_new marital / param=ref ;
+
+  model churn = change_mou change_rev roam_Mean asl_flag dualband refurb_new marital/stb;
+
+run;
+
+ 
+
+proc logistic data=Church_training_V1 descending;
+
+  class asl_flag dualband refurb_new marital / param=ref ;
+
+  model churn = change_mou change_rev roam_Mean asl_flag dualband refurb_new marital;
+
+  output out=Church_training_predicted_V1 predicted=p_churn;
+
+  store out=final_logit;
+
+run;
+
+ 
+
+data Church_training_predicted_V2;set Church_training_predicted_V1;
+
+pred_churn=0;
+
+if p_churn >0.5 then pred_churn=1;run;
+
+ 
+
+proc freq data=Church_training_predicted_V2;
+
+tables churn*pred_churn/norow nocol nopercent;run;
+
+ 
+
+proc logistic data=Church_training_V1 descending;
+
+  class asl_flag dualband refurb_new marital / param=ref ;
+
+  model churn = change_mou change_rev roam_Mean asl_flag dualband refurb_new marital;
+
+  store out=final_logit;
+
+run;
+
+ 
+
+proc plm source=final_logit;
+
+score data=Church_test_V1 out=Church_test_V1_predicted predicted / ilink;
+
+run;
+
+ 
+
+data Church_test_V2_predicted;set Church_test_V1_predicted;
+
+pred_churn=0;
+
+if predicted >0.5 then pred_churn=1;run;
+
+ 
+
+proc freq data=Church_test_V2_predicted;
+
+tables churn*pred_churn/norow nocol nopercent;run;
